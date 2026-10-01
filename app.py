@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-st.image("logo.jpg")
+st.image("Trasua.jpg")
 
 # Cấu hình giao diện trang
 st.set_page_config(
