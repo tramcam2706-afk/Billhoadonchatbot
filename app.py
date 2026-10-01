@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime
+st.image("Trasua.jpg")
 
 # --- CẤU HÌNH TRANG (PHẢI ĐẶT Ở DÒNG ĐẦU TIÊN CỦA STREAMLIT) ---
 st.set_page_config(
