@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-st.image("Trasua.jpg")
+st.image("TRASUA.jpg")
 
 # Cấu hình giao diện trang
 st.set_page_config(
@@ -32,11 +32,18 @@ MENU_TOPPING = {
     "Sương sáo": 5000
 }
 
-# --- PHẦN NHẬP THÔNG TIN ---
-st.subheader("📝 Thông tin đơn hàng")
+# Khởi tạo giỏ hàng trong session_state để lưu các món đã thêm
+if 'cart' not in st.session_state:
+    st.session_state.cart = []
+
+# --- PHẦN NHẬP THÔNG TIN VÀ CHỌN MÓN ---
+st.subheader("📝 Nhập thông tin đơn hàng")
 
 # Nhập tên khách hàng
-ten_khach = st.text_input("Tên khách hàng:", placeholder="Nhập tên của bạn...")
+ten_khach = st.text_input("Tên khách hàng:", placeholder="Nhập tên của bạn...", key="input_ten")
+
+st.write("---")
+st.subheader("🧋 Chọn món trà sữa")
 
 # Chọn loại trà sữa
 chon_tra_sua = st.selectbox("Chọn loại trà sữa:", list(MENU_TRASUA.keys()))
@@ -53,70 +60,117 @@ topping_duoc_chon = []
 cols = st.columns(2)
 for i, topping in enumerate(MENU_TOPPING.keys()):
     with cols[i % 2]:
-        if st.checkbox(f"{topping} (+{MENU_TOPPING[topping]:,}đ)", key=topping):
+        # Sử dụng key động dựa trên tên topping để tránh lỗi xung đột widget
+        if st.checkbox(f"{topping} (+{MENU_TOPPING[topping]:,}đ)", key=f"top_{topping}"):
             topping_duoc_chon.append(topping)
+
+# Nút thêm món vào giỏ hàng
+if st.button("➕ Thêm món này vào giỏ hàng", type="secondary"):
+    # Tính tiền món vừa chọn
+    gia_tra_sua = MENU_TRASUA[chon_tra_sua]
+    tien_ts = gia_tra_sua * so_luong
+    
+    tien_top_1_ly = sum([MENU_TOPPING[t] for t in topping_duoc_chon])
+    tien_top = tien_top_1_ly * so_luong
+    
+    thanh_tien_item = tien_ts + tien_top
+    
+    # Thêm vào giỏ hàng
+    st.session_state.cart.append({
+        "ten_mon": chon_tra_sua,
+        "so_luong": so_luong,
+        "muc_duong": muc_duong,
+        "topping": topping_duoc_chon.copy(),
+        "thanh_tien": thanh_tien_item
+    })
+    st.success(f"Đã thêm **{so_luong}x {chon_tra_sua}** vào giỏ hàng!")
 
 st.write("---")
 
-# --- XỬ LÝ TÍNH TOÁN ---
-if st.button("🖩 Tính Tiền và Xuất Hóa Đơn", type="primary"):
+# --- HIỂN THỊ GIỎ HÀNG HIỆN TẠI ---
+st.subheader(f"🛒 Giỏ hàng của bạn ({len(st.session_state.cart)} loại món)")
+
+if len(st.session_state.cart) > 0:
+    for idx, item in enumerate(st.session_state.cart):
+        with st.container():
+            st.markdown(f"**{idx + 1}. {item['ten_mon']}** (x{item['so_luong']})")
+            st.write(f"- Đường: {item['muc_duong']}")
+            st.write(f"- Topping: {', '.join(item['topping']) if item['topping'] else 'Không có'}")
+            st.write(f"- Thành tiền: **{item['thanh_tien']:,}đ**")
+            
+            # Nút xóa từng món khỏi giỏ hàng
+            if st.button(f"🗑️ Xóa món này", key=f"del_{idx}"):
+                st.session_state.cart.pop(idx)
+                st.rerun()
+            st.write("---")
+            
+    if st.button("🗑️ Xóa toàn bộ giỏ hàng", type="tertiary"):
+        st.session_state.cart = []
+        st.rerun()
+else:
+    st.info("Giỏ hàng của bạn đang trống. Hãy chọn món và bấm 'Thêm món này vào giỏ hàng'.")
+
+# --- XỬ LÝ THANH TOÁN VÀ XUẤT HÓA ĐƠN ---
+if st.button("🖩 Tính Tiền và Xuất Hóa Đơn Chung", type="primary"):
     if not ten_khach.strip():
         st.warning("⚠️ Vui lòng nhập tên khách hàng trước khi tính tiền!")
+    elif len(st.session_state.cart) == 0:
+        st.warning("⚠️ Giỏ hàng đang trống, vui lòng thêm ít nhất một món!")
     else:
-        # Tính tiền trà sữa
-        gia_tra_sua = MENU_TRASUA[chon_tra_sua]
-        tong_tien_tra_sua = gia_tra_sua * so_luong
-
-        # Tính tiền topping (tính cho mỗi phần trà sữa hoặc tổng cộng tùy quy quán, 
-        # ở đây tính tổng tiền topping cộng dồn theo số lượng ly)
-        tong_tien_topping_1_ly = sum([MENU_TOPPING[t] for t in topping_duoc_chon])
-        tong_tien_topping = tong_tien_topping_1_ly * so_luong
-
-        # Tổng thanh toán
-        tong_thanh_toan = tong_tien_tra_sua + tong_tien_topping
-
-        # Thời gian hiện tại
+        # Tính tổng thanh toán tất cả các món trong giỏ
+        tong_thanh_toan = sum([item['thanh_tien'] for item in st.session_state.cart])
         thoi_gian = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-        # --- HIỂN THỊ KẾT QUẢ ---
-        st.success("✅ Đã tạo hóa đơn thành công!")
+        # --- HIỂN THỊ KẾT QUẢ HÓA ĐƠN ---
+        st.success("✅ Đã tạo hóa đơn thành công cho tất cả các món!")
+        st.markdown("### 📋 KẾT QUẢ HÓA ĐƠN CHI TIẾT")
         
-        # Khung hiển thị kết quả giống hóa đơn
-        st.markdown("### 📋 KẾT QUẢ HÓA ĐƠN")
-        
+        # Tạo chuỗi HTML cho hóa đơn hiển thị trên giao diện
+        danh_sach_html = ""
+        for idx, item in enumerate(st.session_state.cart, 1):
+            topping_str = ', '.join(item['topping']) if item['topping'] else 'Không có'
+            danh_sach_html += f"""
+            <p><b>{idx}. {item['ten_mon']}</b> (x{item['so_luong']})<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;+ Đường: {item['muc_duong']}<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;+ Topping: {topping_str}<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<b>Thành tiền: {item['thanh_tien']:,}đ</b></p>
+            """
+
         hoa_don_html = f"""
         <div style="background-color: #f9f9f9; padding: 20px; border-radius: 10px; border: 1px solid #ddd; color: #333;">
             <h3 style="text-align: center; color: #e83e8c; margin-bottom: 5px;">QUÁN TRÀ SỮA HAPPY</h3>
             <p style="text-align: center; font-size: 12px; color: #666;">Địa chỉ: 123 Đường Sữa, TP. Hồ Chí Minh<br>Thời gian: {thoi_gian}</p>
             <hr style="border: 0.5px dashed #ccc;">
             <p><b>Tên khách hàng:</b> {ten_khach}</p>
-            <p><b>Món:</b> {chon_tra_sua} (x{so_luong})</p>
-            <p><b>Mức độ đường:</b> {muc_duong}</p>
-            <p><b>Topping:</b> {', '.join(topping_duoc_chon) if topping_duoc_chon else 'Không có'}</p>
+            <p><b>Danh sách các món đã đặt:</b></p>
+            {danh_sach_html}
             <hr style="border: 0.5px dashed #ccc;">
-            <p style="text-align: right;"><b>Thành tiền trà sữa:</b> {tong_tien_tra_sua:,}đ</p>
-            <p style="text-align: right;"><b>Thành tiền topping:</b> {tong_tien_topping:,}đ</p>
-            <h2 style="text-align: right; color: #d63384;">TỔNG CỘNG: {tong_thanh_toan:,}đ</h2>
+            <h2 style="text-align: right; color: #d63384;">TỔNG THANH TOÁN: {tong_thanh_toan:,}đ</h2>
             <hr style="border: 0.5px dashed #ccc;">
             <p style="text-align: center; font-style: italic; font-size: 13px;">Cảm ơn quý khách và hẹn gặp lại!</p>
         </div>
         """
         st.markdown(hoa_don_html, unsafe_allow_html=True)
 
-        # --- TẠO FILE ĐỂ XUẤT ---
+        # --- TẠO NỘI DUNG FILE TXT ĐỂ XUẤT ---
         noi_dung_file = f"""========================================
            QUÁN TRÀ SỮA HAPPY
 ========================================
 Thời gian: {thoi_gian}
 Tên khách hàng: {ten_khach}
 ----------------------------------------
-Sản phẩm: {chon_tra_sua}
-Số lượng: {so_luong}
-Mức độ đường: {muc_duong}
-Topping: {', '.join(topping_duoc_chon) if topping_duoc_chon else 'Không có'}
-----------------------------------------
-Tiền trà sữa: {tong_tien_tra_sua:,} VNĐ
-Tiền topping: {tong_tien_topping:,} VNĐ
+DANH SÁCH MÓN ĐÃ ĐẶT:
+"""
+        for idx, item in enumerate(st.session_state.cart, 1):
+            topping_str = ', '.join(item['topping']) if item['topping'] else 'Không có'
+            noi_dung_file += f"""
+{idx}. {item['ten_mon']} (Số lượng: {item['so_luong']})
+   - Đường: {item['muc_duong']}
+   - Topping: {topping_str}
+   - Thành tiền: {item['thanh_tien']:,} VNĐ
+----------------------------------------"""
+
+        noi_dung_file += f"""
 ========================================
 TỔNG THANH TOÁN: {tong_thanh_toan:,} VNĐ
 ========================================
