@@ -1,16 +1,21 @@
 import streamlit as st
 from datetime import datetime
-st.image("Trasua.jpg")
 
-# Cấu hình giao diện trang
+# --- CẤU HÌNH TRANG (PHẢI ĐẶT Ở DÒNG ĐẦU TIÊN CỦA STREAMLIT) ---
 st.set_page_config(
     page_title="Hóa Đơn Trà Sữa",
     page_icon="🧋",
     layout="centered"
 )
 
+# Hiển thị ảnh (nếu có file Trasua.jpg cùng thư mục, nếu không có Streamlit sẽ bỏ qua hoặc hiện cảnh báo nhẹ)
+try:
+    st.image("Trasua.jpg", use_column_width=True)
+except:
+    pass
+
 # Tiêu đề ứng dụng
-st.markdown("<h1 style='text-align: center; color: #d63384;'>🧋 HÓA ĐƠN TRÀ SỮA 🧋</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #d63384;'>🧋 HÓA ĐƠN TRÀ SỮA & TRỢ LÝ TƯ VẤN 🧋</h1>", unsafe_allow_html=True)
 st.write("---")
 
 # Định nghĩa bảng giá (có thể tùy chỉnh)
@@ -32,11 +37,61 @@ MENU_TOPPING = {
     "Sương sáo": 5000
 }
 
-# Khởi tạo giỏ hàng trong session_state để lưu các món đã thêm
+# Khởi tạo giỏ hàng trong session_state
 if 'cart' not in st.session_state:
     st.session_state.cart = []
 
-# --- PHẦN NHẬP THÔNG TIN VÀ CHỌN MÓN ---
+# Khởi tạo lịch sử chat cho Chatbot trong session_state
+if 'messages' not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Xin chào! Mình là trợ lý ảo của Quán Trà Sữa Happy. Bạn cần mình tư vấn chọn món hay loại topping nào ngon không?"}
+    ]
+
+
+# ==========================================
+# PHẦN 1: TÍCH HỢP CHATBOT TƯ VẤN (EXPANDER / THANH BÊN)
+# ==========================================
+with st.expander("💬 Trò chuyện với Trợ lý ảo tư vấn trà sữa (Chatbot)", expanded=False):
+    st.write("Hỏi trợ lý về các món best-seller, công thức hoặc gợi ý ngọt/ít ngọt:")
+    
+    # Hiển thị lịch sử hội thoại
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Nhận câu hỏi từ người dùng
+    if user_prompt := st.chat_input("Nhập câu hỏi cho bot (VD: Món nào bán chạy nhất?)..."):
+        # Thêm câu hỏi người dùng vào lịch sử
+        st.session_state.messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+
+        # Logic phản hồi thông minh của Chatbot dựa trên từ khóa
+        bot_response = "Xin lỗi bạn, mình chưa hiểu ý lắm. Bạn có thể hỏi về menu, các loại topping hoặc mức độ đường nhé!"
+        prompt_lower = user_prompt.lower()
+
+        if "bán chạy" in prompt_lower or "ngon" in prompt_lower or "best" in prompt_lower:
+            bot_response = "🌟 Các món bán chạy nhất tại quán là **Trà sữa chân châu đường đen** (đậm đà, thơm ngọt) và **Trà sữa Matcha** (thanh mát, chuẩn vị Nhật)!"
+        elif "topping" in prompt_lower:
+            bot_response = "🧋 Quán có các loại topping rất dẻo và béo như: **Thạch phô mai** (béo ngậy), **Pudding trứng** (mềm mịn) và **Trân châu hoàng kim** dai giòn sần sật. Bạn nên thử kết hợp nhé!"
+        elif "đường" in prompt_lower or "ngọt" in prompt_lower:
+            bot_response = "🥤 Nếu bạn sợ béo hoặc không thích uống quá ngọt, bạn có thể chọn mức **70% đường** hoặc **0% đường (Không đường)** nha!"
+        elif "chào" in prompt_lower or "hi" in prompt_lower or "hello" in prompt_lower:
+            bot_response = "Dạ chào bạn! Chúc bạn một ngày tốt lành. Bạn muốn chọn món trà sữa nào hôm nay ạ?"
+        elif "giá" in prompt_lower or "menu" in prompt_lower:
+            bot_response = "📋 Giá trà sữa dao động từ **25.000đ đến 35.000đ**, các loại topping thêm từ **5.000đ đến 8.000đ** bạn nhé!"
+
+        # Thêm phản hồi của bot vào lịch sử
+        st.session_state.messages.append({"role": "assistant", "content": bot_response})
+        with st.chat_message("assistant"):
+            st.markdown(bot_response)
+
+st.write("---")
+
+
+# ==========================================
+# PHẦN 2: NHẬP THÔNG TIN VÀ CHỌN MÓN (ĐẶT HÀNG NHIỀU LOẠI)
+# ==========================================
 st.subheader("📝 Nhập thông tin đơn hàng")
 
 # Nhập tên khách hàng
@@ -60,13 +115,11 @@ topping_duoc_chon = []
 cols = st.columns(2)
 for i, topping in enumerate(MENU_TOPPING.keys()):
     with cols[i % 2]:
-        # Sử dụng key động dựa trên tên topping để tránh lỗi xung đột widget
         if st.checkbox(f"{topping} (+{MENU_TOPPING[topping]:,}đ)", key=f"top_{topping}"):
             topping_duoc_chon.append(topping)
 
 # Nút thêm món vào giỏ hàng
 if st.button("➕ Thêm món này vào giỏ hàng", type="secondary"):
-    # Tính tiền món vừa chọn
     gia_tra_sua = MENU_TRASUA[chon_tra_sua]
     tien_ts = gia_tra_sua * so_luong
     
@@ -87,7 +140,10 @@ if st.button("➕ Thêm món này vào giỏ hàng", type="secondary"):
 
 st.write("---")
 
-# --- HIỂN THỊ GIỎ HÀNG HIỆN TẠI ---
+
+# ==========================================
+# PHẦN 3: HIỂN THỊ GIỎ HÀNG HIỆN TẠI
+# ==========================================
 st.subheader(f"🛒 Giỏ hàng của bạn ({len(st.session_state.cart)} loại món)")
 
 if len(st.session_state.cart) > 0:
@@ -98,7 +154,6 @@ if len(st.session_state.cart) > 0:
             st.write(f"- Topping: {', '.join(item['topping']) if item['topping'] else 'Không có'}")
             st.write(f"- Thành tiền: **{item['thanh_tien']:,}đ**")
             
-            # Nút xóa từng món khỏi giỏ hàng
             if st.button(f"🗑️ Xóa món này", key=f"del_{idx}"):
                 st.session_state.cart.pop(idx)
                 st.rerun()
@@ -110,22 +165,22 @@ if len(st.session_state.cart) > 0:
 else:
     st.info("Giỏ hàng của bạn đang trống. Hãy chọn món và bấm 'Thêm món này vào giỏ hàng'.")
 
-# --- XỬ LÝ THANH TOÁN VÀ XUẤT HÓA ĐƠN ---
+
+# ==========================================
+# PHẦN 4: XỬ LÝ THANH TOÁN VÀ XUẤT HÓA ĐƠN
+# ==========================================
 if st.button("🖩 Tính Tiền và Xuất Hóa Đơn Chung", type="primary"):
     if not ten_khach.strip():
         st.warning("⚠️ Vui lòng nhập tên khách hàng trước khi tính tiền!")
     elif len(st.session_state.cart) == 0:
         st.warning("⚠️ Giỏ hàng đang trống, vui lòng thêm ít nhất một món!")
     else:
-        # Tính tổng thanh toán tất cả các món trong giỏ
         tong_thanh_toan = sum([item['thanh_tien'] for item in st.session_state.cart])
         thoi_gian = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-        # --- HIỂN THỊ KẾT QUẢ HÓA ĐƠN ---
         st.success("✅ Đã tạo hóa đơn thành công cho tất cả các món!")
         st.markdown("### 📋 KẾT QUẢ HÓA ĐƠN CHI TIẾT")
         
-        # Tạo chuỗi HTML cho hóa đơn hiển thị trên giao diện
         danh_sach_html = ""
         for idx, item in enumerate(st.session_state.cart, 1):
             topping_str = ', '.join(item['topping']) if item['topping'] else 'Không có'
@@ -152,7 +207,7 @@ if st.button("🖩 Tính Tiền và Xuất Hóa Đơn Chung", type="primary"):
         """
         st.markdown(hoa_don_html, unsafe_allow_html=True)
 
-        # --- TẠO NỘI DUNG FILE TXT ĐỂ XUẤT ---
+        # Tạo nội dung file xuất TXT
         noi_dung_file = f"""========================================
            QUÁN TRÀ SỮA HAPPY
 ========================================
@@ -177,7 +232,6 @@ TỔNG THANH TOÁN: {tong_thanh_toan:,} VNĐ
          Cảm ơn quý khách!
 """
 
-        # Nút tải xuống file hóa đơn
         st.markdown("<br>", unsafe_allow_html=True)
         st.download_button(
             label="📥 Tải xuống file hóa đơn (.txt)",
