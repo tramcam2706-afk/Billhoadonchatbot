@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime
+from openai import OpenAI
 st.image("Trasua.jpg")
 
 # --- CẤU HÌNH TRANG (PHẢI ĐẶT Ở DÒNG ĐẦU TIÊN CỦA STREAMLIT) ---
@@ -9,17 +10,17 @@ st.set_page_config(
     layout="centered"
 )
 
-# Hiển thị ảnh (nếu có file Trasua.jpg cùng thư mục, nếu không có Streamlit sẽ bỏ qua hoặc hiện cảnh báo nhẹ)
+# Hiển thị ảnh (nếu có file Trasua.jpg cùng thư mục, nếu không có Streamlit sẽ bỏ qua)
 try:
     st.image("Trasua.jpg", use_column_width=True)
 except:
     pass
 
 # Tiêu đề ứng dụng
-st.markdown("<h1 style='text-align: center; color: #d63384;'>🧋 HÓA ĐƠN TRÀ SỮA & TRỢ LÝ TƯ VẤN 🧋</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #d63384;'>🧋 HÓA ĐƠN TRÀ SỮA & TRỢ LÝ TƯ VẤN AI 🧋</h1>", unsafe_allow_html=True)
 st.write("---")
 
-# Định nghĩa bảng giá (có thể tùy chỉnh)
+# Định nghĩa bảng giá
 MENU_TRASUA = {
     "Trà sữa truyền thống": 25000,
     "Trà sữa chân châu đường đen": 35000,
@@ -45,47 +46,81 @@ if 'cart' not in st.session_state:
 # Khởi tạo lịch sử chat cho Chatbot trong session_state
 if 'messages' not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Xin chào! Mình là trợ lý ảo của Quán Trà Sữa Happy. Bạn cần mình tư vấn chọn món hay loại topping nào ngon không?"}
+        {"role": "assistant", "content": "Xin chào! Mình là trợ lý AI thông minh của Quán Trà Sữa Happy. Bạn muốn mình tư vấn loại trà sữa hay topping nào phù hợp khẩu vị không?"}
     ]
 
 
 # ==========================================
-# PHẦN 1: TÍCH HỢP CHATBOT TƯ VẤN (EXPANDER / THANH BÊN)
+# PHẦN 1: TÍCH HỢP CHATBOT DÙNG API KEY
 # ==========================================
-with st.expander("💬 Trò chuyện với Trợ lý ảo tư vấn trà sữa (Chatbot)", expanded=False):
-    st.write("Hỏi trợ lý về các món best-seller, công thức hoặc gợi ý ngọt/ít ngọt:")
+with st.expander("💬 Trò chuyện với Trợ lý AI tư vấn trà sữa", expanded=False):
+    st.write("Hỏi trợ lý AI bất cứ điều gì về menu, công thức hoặc gợi ý món ngon:")
     
+    # Cấu hình Client API (Sử dụng OpenRouter / OpenAI API key đã cung cấp)
+    # Lưu ý: Nếu dùng khóa OpenRouter, bạn có thể truyền base_url="https://openrouter.ai/api/v1" và dùng model phù hợp như "openai/gpt-4o-mini" hoặc giữ nguyên chuẩn OpenAI nếu là key chính hãng.
+    API_KEY = "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"
+    
+    # Khởi tạo OpenAI client (Hỗ trợ cả OpenRouter hoặc OpenAI)
+    try:
+        client = OpenAI(
+            api_key=API_KEY,
+            base_url="https://openrouter.ai/api/v1" # Đổi base_url nếu dùng OpenRouter, xóa dòng này nếu dùng key OpenAI trực tiếp
+        )
+        using_ai = True
+    except Exception as e:
+        using_ai = False
+        st.error(f"Lỗi khởi tạo API: {e}")
+
     # Hiển thị lịch sử hội thoại
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Nhận câu hỏi từ người dùng
-    if user_prompt := st.chat_input("Nhập câu hỏi cho bot (VD: Món nào bán chạy nhất?)..."):
-        # Thêm câu hỏi người dùng vào lịch sử
+    # Nhận câu hỏi từ người dùng qua chat input
+    if user_prompt := st.chat_input("Nhập câu hỏi cho AI (VD: Tôi thích uống béo ngọt thì chọn món nào?)..."):
+        # Thêm câu hỏi người dùng vào lịch sử hiển thị
         st.session_state.messages.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        # Logic phản hồi thông minh của Chatbot dựa trên từ khóa
-        bot_response = "Xin lỗi bạn, mình chưa hiểu ý lắm. Bạn có thể hỏi về menu, các loại topping hoặc mức độ đường nhé!"
-        prompt_lower = user_prompt.lower()
-
-        if "bán chạy" in prompt_lower or "ngon" in prompt_lower or "best" in prompt_lower:
-            bot_response = "🌟 Các món bán chạy nhất tại quán là **Trà sữa chân châu đường đen** (đậm đà, thơm ngọt) và **Trà sữa Matcha** (thanh mát, chuẩn vị Nhật)!"
-        elif "topping" in prompt_lower:
-            bot_response = "🧋 Quán có các loại topping rất dẻo và béo như: **Thạch phô mai** (béo ngậy), **Pudding trứng** (mềm mịn) và **Trân châu hoàng kim** dai giòn sần sật. Bạn nên thử kết hợp nhé!"
-        elif "đường" in prompt_lower or "ngọt" in prompt_lower:
-            bot_response = "🥤 Nếu bạn sợ béo hoặc không thích uống quá ngọt, bạn có thể chọn mức **70% đường** hoặc **0% đường (Không đường)** nha!"
-        elif "chào" in prompt_lower or "hi" in prompt_lower or "hello" in prompt_lower:
-            bot_response = "Dạ chào bạn! Chúc bạn một ngày tốt lành. Bạn muốn chọn món trà sữa nào hôm nay ạ?"
-        elif "giá" in prompt_lower or "menu" in prompt_lower:
-            bot_response = "📋 Giá trà sữa dao động từ **25.000đ đến 35.000đ**, các loại topping thêm từ **5.000đ đến 8.000đ** bạn nhé!"
-
-        # Thêm phản hồi của bot vào lịch sử
-        st.session_state.messages.append({"role": "assistant", "content": bot_response})
+        # Gọi API lấy câu trả lời từ AI
         with st.chat_message("assistant"):
-            st.markdown(bot_response)
+            with st.spinner("AI đang suy nghĩ..."):
+                try:
+                    # Thiết lập ngữ cảnh (System prompt) cho nhân viên bán trà sữa AI
+                    system_prompt = """Bạn là trợ lý AI thân thiện chuyên tư vấn tại quán 'Quán Trà Sữa Happy'. 
+                    Menu trà sữa của quán gồm: 
+                    - Trà sữa truyền thống (25,000đ)
+                    - Trà sữa chân châu đường đen (35,000đ - Best seller)
+                    - Trà sữa matcha (30,000đ)
+                    - Trà sữa khoai môn (30,000đ)
+                    - Trà sữa ô long (28,000đ)
+                    - Hồng trà sữa (25,000đ)
+                    
+                    Các loại topping (5,000đ - 8,000đ): Trân châu đen, trân châu trắng, thạch phô mai, pudding trứng, trân châu hoàng kim, sương sáo.
+                    Mức độ đường tùy chọn: 100%, 70%, 0% (không đường).
+                    Hãy tư vấn nhiệt tình, ngắn gọn, lịch sự và phù hợp với khách hàng Việt Nam."""
+
+                    # Chuyển đổi định dạng lịch sử chat gửi lên API
+                    messages_payload = [{"role": "system", "content": system_prompt}]
+                    for msg in st.session_state.messages:
+                        messages_payload.append({"role": msg["role"], "content": msg["content"]})
+
+                    # Gọi model (Sử dụng model mặc định phù hợp với OpenRouter/OpenAI)
+                    response = client.chat.completions.create(
+                        model="openai/gpt-4o-mini", # Hoặc "gpt-3.5-turbo" tùy thuộc vào key
+                        messages=messages_payload,
+                        temperature=0.7,
+                        max_tokens=300
+                    )
+                    
+                    bot_response = response.choices[0].message.content
+                except Exception as e:
+                    bot_response = f"⚠️ Không thể kết nối tới AI lúc này. Lỗi chi tiết: {e}"
+
+                st.markdown(bot_response)
+                # Lưu phản hồi của AI vào lịch sử
+                st.session_state.messages.append({"role": "assistant", "content": bot_response})
 
 st.write("---")
 
