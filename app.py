@@ -1,6 +1,12 @@
 import streamlit as st
 from datetime import datetime
-from openai import OpenAI
+
+# Kiểm tra và import thư viện openai an toàn
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
 
 # --- CẤU HÌNH TRANG (PHẢI ĐẶT Ở DÒNG ĐẦU TIÊN CỦA STREAMLIT) ---
 st.set_page_config(
@@ -9,7 +15,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Hiển thị ảnh (nếu có file Trasua.jpg cùng thư mục, nếu không có Streamlit sẽ bỏ qua)
+# Hiển thị ảnh (nếu có file Trasua.jpg cùng thư mục)
 try:
     st.image("Trasua.jpg", use_column_width=True)
 except:
@@ -55,20 +61,7 @@ if 'messages' not in st.session_state:
 with st.expander("💬 Trò chuyện với Trợ lý AI tư vấn trà sữa", expanded=False):
     st.write("Hỏi trợ lý AI bất cứ điều gì về menu, công thức hoặc gợi ý món ngon:")
     
-    # Cấu hình Client API (Sử dụng OpenRouter / OpenAI API key đã cung cấp)
-    # Lưu ý: Nếu dùng khóa OpenRouter, bạn có thể truyền base_url="https://openrouter.ai/api/v1" và dùng model phù hợp như "openai/gpt-4o-mini" hoặc giữ nguyên chuẩn OpenAI nếu là key chính hãng.
     API_KEY = "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"
-    
-    # Khởi tạo OpenAI client (Hỗ trợ cả OpenRouter hoặc OpenAI)
-    try:
-        client = OpenAI(
-            api_key=API_KEY,
-            base_url="https://openrouter.ai/api/v1" # Đổi base_url nếu dùng OpenRouter, xóa dòng này nếu dùng key OpenAI trực tiếp
-        )
-        using_ai = True
-    except Exception as e:
-        using_ai = False
-        st.error(f"Lỗi khởi tạo API: {e}")
 
     # Hiển thị lịch sử hội thoại
     for message in st.session_state.messages:
@@ -76,49 +69,60 @@ with st.expander("💬 Trò chuyện với Trợ lý AI tư vấn trà sữa", e
             st.markdown(message["content"])
 
     # Nhận câu hỏi từ người dùng qua chat input
-    if user_prompt := st.chat_input("Nhập câu hỏi cho AI (VD: Tôi thích uống béo ngọt thì chọn món nào?)..."):
-        # Thêm câu hỏi người dùng vào lịch sử hiển thị
+    if user_prompt := st.chat_input("Nhập câu hỏi cho AI..."):
         st.session_state.messages.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        # Gọi API lấy câu trả lời từ AI
         with st.chat_message("assistant"):
             with st.spinner("AI đang suy nghĩ..."):
-                try:
-                    # Thiết lập ngữ cảnh (System prompt) cho nhân viên bán trà sữa AI
-                    system_prompt = """Bạn là trợ lý AI thân thiện chuyên tư vấn tại quán 'Quán Trà Sữa Happy'. 
-                    Menu trà sữa của quán gồm: 
-                    - Trà sữa truyền thống (25,000đ)
-                    - Trà sữa chân châu đường đen (35,000đ - Best seller)
-                    - Trà sữa matcha (30,000đ)
-                    - Trà sữa khoai môn (30,000đ)
-                    - Trà sữa ô long (28,000đ)
-                    - Hồng trà sữa (25,000đ)
-                    
-                    Các loại topping (5,000đ - 8,000đ): Trân châu đen, trân châu trắng, thạch phô mai, pudding trứng, trân châu hoàng kim, sương sáo.
-                    Mức độ đường tùy chọn: 100%, 70%, 0% (không đường).
-                    Hãy tư vấn nhiệt tình, ngắn gọn, lịch sự và phù hợp với khách hàng Việt Nam."""
+                bot_response = ""
+                if not HAS_OPENAI:
+                    bot_response = "⚠️ Thư viện `openai` chưa được cài đặt trên môi trường này. Vui lòng thêm `openai` vào file `requirements.txt`."
+                else:
+                    try:
+                        client = OpenAI(
+                            api_key=API_KEY,
+                            base_url="https://openrouter.ai/api/v1"
+                        )
+                        
+                        system_prompt = """Bạn là trợ lý AI thân thiện chuyên tư vấn tại quán 'Quán Trà Sữa Happy'. 
+                        Menu trà sữa của quán gồm: 
+                        - Trà sữa truyền thống (25,000đ)
+                        - Trà sữa chân châu đường đen (35,000đ - Best seller)
+                        - Trà sữa matcha (30,000đ)
+                        - Trà sữa khoai môn (30,000đ)
+                        - Trà sữa ô long (28,000đ)
+                        - Hồng trà sữa (25,000đ)
+                        
+                        Các loại topping (5,000đ - 8,000đ): Trân châu đen, trân châu trắng, thạch phô mai, pudding trứng, trân châu hoàng kim, sương sáo.
+                        Mức độ đường tùy chọn: 100%, 70%, 0% (không đường).
+                        Hãy tư vấn nhiệt tình, ngắn gọn, lịch sự."""
 
-                    # Chuyển đổi định dạng lịch sử chat gửi lên API
-                    messages_payload = [{"role": "system", "content": system_prompt}]
-                    for msg in st.session_state.messages:
-                        messages_payload.append({"role": msg["role"], "content": msg["content"]})
+                        messages_payload = [{"role": "system", "content": system_prompt}]
+                        for msg in st.session_state.messages:
+                            messages_payload.append({"role": msg["role"], "content": msg["content"]})
 
-                    # Gọi model (Sử dụng model mặc định phù hợp với OpenRouter/OpenAI)
-                    response = client.chat.completions.create(
-                        model="openai/gpt-4o-mini", # Hoặc "gpt-3.5-turbo" tùy thuộc vào key
-                        messages=messages_payload,
-                        temperature=0.7,
-                        max_tokens=300
-                    )
-                    
-                    bot_response = response.choices[0].message.content
-                except Exception as e:
-                    bot_response = f"⚠️ Không thể kết nối tới AI lúc này. Lỗi chi tiết: {e}"
+                        response = client.chat.completions.create(
+                            model="openai/gpt-4o-mini",
+                            messages=messages_payload,
+                            temperature=0.7,
+                            max_tokens=300
+                        )
+                        bot_response = response.choices[0].message.content
+                    except Exception as e:
+                        # Dự phòng phản hồi thông minh bằng từ khóa nếu API gặp lỗi kết nối mạng
+                        prompt_lower = user_prompt.lower()
+                        if "bán chạy" in prompt_lower or "ngon" in prompt_lower or "best" in prompt_lower:
+                            bot_response = "🌟 Các món bán chạy nhất tại quán là **Trà sữa chân châu đường đen** và **Trà sữa Matcha**!"
+                        elif "topping" in prompt_lower:
+                            bot_response = "🧋 Quán có các loại topping: Thạch phô mai, pudding trứng, trân châu hoàng kim, sương sáo..."
+                        elif "đường" in prompt_lower:
+                            bot_response = "🥤 Bạn có thể chọn mức đường 100%, 70% hoặc 0% (không đường) nhé!"
+                        else:
+                            bot_response = f"⚠️ Lỗi kết nối AI: {e}"
 
                 st.markdown(bot_response)
-                # Lưu phản hồi của AI vào lịch sử
                 st.session_state.messages.append({"role": "assistant", "content": bot_response})
 
 st.write("---")
@@ -129,22 +133,15 @@ st.write("---")
 # ==========================================
 st.subheader("📝 Nhập thông tin đơn hàng")
 
-# Nhập tên khách hàng
 ten_khach = st.text_input("Tên khách hàng:", placeholder="Nhập tên của bạn...", key="input_ten")
 
 st.write("---")
 st.subheader("🧋 Chọn món trà sữa")
 
-# Chọn loại trà sữa
 chon_tra_sua = st.selectbox("Chọn loại trà sữa:", list(MENU_TRASUA.keys()))
-
-# Nhập số lượng
 so_luong = st.number_input("Số lượng:", min_value=1, max_value=100, value=1, step=1)
-
-# Chọn mức độ đường
 muc_duong = st.radio("Mức độ đường:", ["100% đường", "70% đường", "0% đường (Không đường)"], horizontal=True)
 
-# Chọn Topping (nhiều lựa chọn)
 st.write("Chọn Topping thêm (tùy chọn):")
 topping_duoc_chon = []
 cols = st.columns(2)
@@ -153,7 +150,6 @@ for i, topping in enumerate(MENU_TOPPING.keys()):
         if st.checkbox(f"{topping} (+{MENU_TOPPING[topping]:,}đ)", key=f"top_{topping}"):
             topping_duoc_chon.append(topping)
 
-# Nút thêm món vào giỏ hàng
 if st.button("➕ Thêm món này vào giỏ hàng", type="secondary"):
     gia_tra_sua = MENU_TRASUA[chon_tra_sua]
     tien_ts = gia_tra_sua * so_luong
@@ -163,7 +159,6 @@ if st.button("➕ Thêm món này vào giỏ hàng", type="secondary"):
     
     thanh_tien_item = tien_ts + tien_top
     
-    # Thêm vào giỏ hàng
     st.session_state.cart.append({
         "ten_mon": chon_tra_sua,
         "so_luong": so_luong,
@@ -242,7 +237,6 @@ if st.button("🖩 Tính Tiền và Xuất Hóa Đơn Chung", type="primary"):
         """
         st.markdown(hoa_don_html, unsafe_allow_html=True)
 
-        # Tạo nội dung file xuất TXT
         noi_dung_file = f"""========================================
            QUÁN TRÀ SỮA HAPPY
 ========================================
